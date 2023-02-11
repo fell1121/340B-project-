@@ -114,3 +114,74 @@ ggsave("Figure 1.png", height = 9, width = 16)
 
 
 ![Figure_1_revisit](https://user-images.githubusercontent.com/27037723/218240351-8e0f9c0f-4af5-4295-95a1-83f50c4b70b6.png)
+
+
+#########################################
+########################################
+########################################
+library(lubridate)
+library(tidyverse)
+library(readr)
+library(readxl)
+library(igraph)
+
+df<- read_csv("cleaned_hrsa_with_npi.csv")
+
+df$start_year<-format(df$contract_begin_date,"%Y")
+df$end_year<-format(df$contract_termination_date,"%Y")
+## Replace NA in end Year with 2022, because it mean it still on
+df<-df %>% mutate_at(vars("end_year"), ~replace_na(.,"2022"))
+df2 <- df %>%
+filter(!is.na(npi)) %>%
+filter(specialty_mail_flag != 1 & in_house_flag != 1) %>%
+distinct(ce_id, npi, pharmacy_name, pharm_id, pharmacy_state, start_year, end_year) #%>%
+#filter(between(start_year, 2009, 2022))
+df2<-arrange(df2,pharmacy_state,start_year)
+##
+Start_contract_number<-df2%>%
+group_by(start_year,npi,ce_id,pharmacy_state)%>%
+summarise(n_Start=n())
+
+End_contract_number<-df2%>%
+group_by(end_year,npi,ce_id,pharmacy_state)%>%
+summarise(n_End=n())
+## ‘summarise()‘ has grouped output by ’end_year’, ’npi’, ’ce_id’. You can
+## override using the ‘.groups‘ argument.
+df3<-full_join(Start_contract_number,End_contract_number,by=c("npi","ce_id","pharmacy_state"))
+sum(duplicated(df3))
+## [1] 0
+df4<-filter(df3,end_year==2022) #I SET year end 2022
+df4<-arrange(df4,npi,ce_id)
+df5<-df4%>%
+group_by(npi,pharmacy_state,ce_id)%>%
+mutate(contract.ce_id=n())
+##MINESOTA STATE
+MN_df4<-filter(df5,
+pharmacy_state=="MN",
+#n_End!=1,
+#n_Start!=1
+)
+MN_df41 <- data.frame(MN_df4$npi,MN_df4$ce_id)
+MN_graph <- graph.data.frame(MN_df41, directed = F)
+##Graph network
+## NPI IN MINESOTA
+MN_NPI<-data.frame(MN_df4$npi,MN_df4$pharmacy_state)
+NPI_Graph<-graph.data.frame(MN_NPI,directed = F)
+set.seed(1233)
+
+Grouping the Dataframe into communities
+The dataframe “MN_graph” was grouped into communities using “edge.betweenness.community()”
+x <- edge.betweenness.community(MN_graph)
+## Checking the number of communities
+length(x)
+## [1] 50
+Visualizing the Graph
+plot(x, MN_graph,
+vertex.size=.5,
+edge.arrow.size=.3,
+vertex.label.cex=.01,)
+
+![MN community CE and NPI](https://user-images.githubusercontent.com/27037723/218240554-d23e1482-9dd0-4cd2-9bc7-4d3927565ad8.png)
+
+
+
